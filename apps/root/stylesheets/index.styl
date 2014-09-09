@@ -1,16 +1,66 @@
 .landing
-  padding: 4em
+  position absolute
+  top 0
+  left 0
+  width 100%
+  max-width 100%
+  line-height 1.6
+  font-size 21px
+  padding 1em 0 0 0
+
+#layout-header 
+  display none
+
+.section-1, .section-2, .section-3, .section-4
+  position relative
+  float left
+  width: 100%
+  min-height 400px
+  background-color white
+  padding 2.5em 3em 2.5em 3em
+
+.section-2
+  background-color #F9F9F9
+
+.section-3
+  background-color #F5F5F5
+
+.section-4
+  background-color #E5E5E5
 
 .mark
-  padding-left: 7em
-  padding-bottom: 2em
-  display: block
+  display block
+  position relative
+  float left
+  width 60px
+  margin 0 0 20px 0
+  opacity 0.85
+
+.login
+  position absolute
+  right 2.5em
+  padding 0 0 0 0
+  > a
+    color green
+    &:hover
+      color black
 
 .introduction
-  padding: 4em 0
-  line-height: 1.4
-  max-width: 500px
-  font-size: 22px
+  margin 30px 0 0 0
+  padding 2em 0
+  max-width 700px
 
-a
-  color: green
+.examples-text
+  position relative
+  float left
+  width 30%
+
+.examples-images
+  position relative
+  float left
+  width 70%
+  > img 
+    height 300px
+    padding 0 20px 0 20px
+  
+

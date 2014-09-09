@@ -1,11 +1,10 @@
-// TODO: make into a block view
+# // TODO: make into a block view
 
 Backbone = require "backbone"
 $ = require 'jquery'
 Backbone.$ = $
 sd = require("sharify").data
 Channel = require "../../models/channel.coffee"
-headerTemplate = -> require("../../components/header/header.jade") arguments...
 
 module.exports.ChannelView = class ChannelView extends Backbone.View
 
