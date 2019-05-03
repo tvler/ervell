@@ -4,7 +4,6 @@ import styled from 'styled-components'
 
 import channelBreadcrumbFragment from 'v2/components/ChannelMetadata/components/ChannelBreadcrumb/fragments/channelBreadcrumb'
 
-import { truncate } from 'v2/components/UI/Truncate'
 import ColoredChannelLink from 'v2/components/UI/ColoredChannelLink'
 import StickyBreadcrumbPath from 'v2/components/UI/StickyBreadcrumbPath'
 import BorderedLock from 'v2/components/UI/BorderedLock'
