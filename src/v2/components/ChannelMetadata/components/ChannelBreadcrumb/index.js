@@ -47,7 +47,13 @@ export default class ChannelBreadcrumb extends Component {
                   resting: (
                     <span dangerouslySetInnerHTML={{ __html: channel.title }} />
                   ),
-                  stuck: truncate(channel.title, 25),
+                  stuck: (
+                    <span
+                      dangerouslySetInnerHTML={{
+                        __html: channel.truncatedTitle,
+                      }}
+                    />
+                  ),
                 }[mode]
               }
             </ColoredChannelLink>
