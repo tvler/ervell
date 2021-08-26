@@ -1,6 +1,6 @@
-import { Reference, StoreObject, useQuery } from '@apollo/client'
+import { NetworkStatus, Reference, StoreObject, useQuery } from '@apollo/client'
 import { Modifier } from '@apollo/client/cache/core/types/common'
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 
 import { ChannelContentsConnectable } from '__generated__/ChannelContentsConnectable'
 import { ChannelContentsCount } from '__generated__/ChannelContentsCount'
@@ -58,17 +58,30 @@ export const usePaginatedBlocks = (unsafeArgs: {
   /**
    * The current blocks that we have for a channel
    */
-  const { data: unsafeData, fetchMore, client } = useQuery<
-    ChannelBlokksPaginated,
-    ChannelBlokksPaginatedVariables
-  >(channelBlokksPaginatedQuery, {
-    variables: {
-      id: args.current.channelId.toString(),
-      page: 1,
-      per: channelBlokksPaginatedPerPage,
-    },
-    ssr: args.current.ssr,
-  })
+  const {
+    data: unsafeData,
+    previousData: unsafePreviousData,
+    fetchMore,
+    client,
+    networkStatus,
+  } = useQuery<ChannelBlokksPaginated, ChannelBlokksPaginatedVariables>(
+    channelBlokksPaginatedQuery,
+    {
+      variables: {
+        id: args.current.channelId.toString(),
+        page: 1,
+        per: channelBlokksPaginatedPerPage,
+      },
+      ssr: args.current.ssr,
+      notifyOnNetworkStatusChange: true,
+    }
+  )
+
+  useEffect(() => {
+    if (networkStatus === NetworkStatus.loading) {
+      queriedPageNumbersRef.current = new Set([1])
+    }
+  }, [networkStatus])
 
   /**
    * A function that allows you to directly modify the channel's "blokks"
@@ -146,7 +159,9 @@ export const usePaginatedBlocks = (unsafeArgs: {
   /**
    * A set that keeps track of which pages have already been queried for
    */
-  const queriedPageNumbersRef = useRef(new Set<number>())
+  const queriedPageNumbersRef = useRef(
+    new Set<number>([1])
+  )
 
   /**
    * A helper function to re-query for pages that have already been
@@ -175,8 +190,12 @@ export const usePaginatedBlocks = (unsafeArgs: {
   /**
    * An array of blocks that apollo currently has cached
    */
+  const dataOrPreviousData =
+    unsafeData === undefined && networkStatus === NetworkStatus.loading
+      ? unsafePreviousData
+      : unsafeData
   const blocks: UsePaginatedBlocksApi['blocks'] =
-    unsafeData?.channel?.blokks ?? []
+    dataOrPreviousData?.channel?.blokks ?? []
 
   /**
    * The total number of blocks that a channel has. Note that this
@@ -191,6 +210,7 @@ export const usePaginatedBlocks = (unsafeArgs: {
    */
   const getPage: UsePaginatedBlocksApi['getPage'] = useCallback(
     pageNumber => {
+      console.log('getPage', pageNumber)
       queriedPageNumbersRef.current.add(pageNumber)
 
       fetchMore({
@@ -353,7 +373,7 @@ export const usePaginatedBlocks = (unsafeArgs: {
    * Delete block cache and wipe queriedPageNumbersRef
    */
   const addBlock: UsePaginatedBlocksApi['addBlock'] = useCallback(() => {
-    queriedPageNumbersRef.current = new Set()
+    // queriedPageNumbersRef.current = new Set()
     updateCache(({ blockArgs: [_prevBlocks, { DELETE }] }) => {
       return {
         newBlocks: DELETE,
