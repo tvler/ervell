@@ -231,6 +231,7 @@ export function usePaginatedBlocks<
     variables: channelQueryData.variables,
     ssr: ssr,
     context: { queryDeduplication: false },
+    fetchPolicy: 'no-cache',
   })
 
   /**
