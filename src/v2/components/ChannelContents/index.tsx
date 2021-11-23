@@ -62,15 +62,13 @@ const ChannelContents: React.FC<Props> = WithIsSpiderRequesting<ExtendedProps>(
   memo(({ channel, isSpiderRequesting, ...rest }) => {
     const {
       blocks,
-      getPage,
-      getPageFromIndex,
-      hasQueriedPage,
       moveBlock,
       removeBlock,
       addBlock,
       contentCount,
       updateBlock,
       getBlocksFromCache,
+      viewedBlock,
     } = usePaginatedBlocks<
       ChannelBlokksPaginated,
       ChannelBlokksPaginatedVariables,
@@ -85,13 +83,10 @@ const ChannelContents: React.FC<Props> = WithIsSpiderRequesting<ExtendedProps>(
     })
 
     const onItemIntersected = useCallback(
-      (index: number) => {
-        const page = getPageFromIndex(index)
-        if (!hasQueriedPage(page)) {
-          getPage(page)
-        }
+      (args: { index: number; isIntersecting: boolean }) => {
+        viewedBlock({ blockIndex: args.index, viewed: args.isIntersecting })
       },
-      [getPage, getPageFromIndex, hasQueriedPage]
+      [viewedBlock]
     )
 
     const updateConnectable = useCallback(

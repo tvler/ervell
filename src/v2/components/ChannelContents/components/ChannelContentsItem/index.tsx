@@ -65,7 +65,7 @@ interface Props {
     oldIndex: number
     newIndex: number
   }) => void
-  onItemIntersected: (index: number) => void
+  onItemIntersected: (args: { index: number; isIntersecting: boolean }) => void
 }
 
 export const ChannelContentsItem: React.FC<Props> = memo(
@@ -105,9 +105,10 @@ export const ChannelContentsItem: React.FC<Props> = memo(
     >(
       itemIndex => entries => {
         const entry = entries[0]
-        if (entry.isIntersecting) {
-          onItemIntersected(itemIndex)
-        }
+        onItemIntersected({
+          index: itemIndex,
+          isIntersecting: entry.isIntersecting,
+        })
       },
       [onItemIntersected]
     )
@@ -121,7 +122,6 @@ export const ChannelContentsItem: React.FC<Props> = memo(
       callback: intersectionObserverCallback,
       id: index,
       options: intersectionObserverOptions,
-      skip: !!connectable,
     }
 
     if (connectable) {

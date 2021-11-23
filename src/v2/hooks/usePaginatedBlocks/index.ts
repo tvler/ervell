@@ -6,7 +6,7 @@ import {
   useQuery,
 } from '@apollo/client'
 import { Modifier } from '@apollo/client/cache/core/types/common'
-import { useRef, useCallback, useMemo } from 'react'
+import { useRef, useCallback, useMemo, useState } from 'react'
 
 import { ChannelContentsConnectable } from '__generated__/ChannelContentsConnectable'
 import {
@@ -120,9 +120,7 @@ interface UsePaginatedBlocksBaseApi<
 > {
   blocks: Array<Block<ChannelQueryData>>
   contentCount: number
-  getPage: (pageNumber: number) => void
-  hasQueriedPage: (pageNumber: number) => boolean
-  getPageFromIndex: (index: number) => number
+  viewedBlock: (args: { blockIndex: number; viewed: boolean }) => void
   removeBlock: (args: { id: number; type: string }) => void
   moveBlock: (args: { oldIndex: number; newIndex: number }) => void
   addBlock: () => void
@@ -196,7 +194,8 @@ export function usePaginatedBlocks<
   /**
    * A set that keeps track of which pages have already been queried for
    */
-  const queriedPageNumbersRef = useRef(new Set<number>())
+  const pageState = useRef(new Map<number, 'pending' | 'validated'>())
+  const viewedPagesRef = useRef(new Map<number, Set<number>>())
 
   /**
    * A variable that stores all the identifiable information of
@@ -206,8 +205,9 @@ export function usePaginatedBlocks<
   const channelQueryData: {
     query: DocumentNode
     variables: ChannelQueryVariables
+    // key: string
   } = useMemo(() => {
-    queriedPageNumbersRef.current = new Set()
+    pageState.current = new Map()
 
     return {
       query: channelQuery,
@@ -224,14 +224,15 @@ export function usePaginatedBlocks<
   /**
    * The current blocks that we have for a channel
    */
-  const { data: unsafeData, fetchMore, client } = useQuery<
+  const { fetchMore, client } = useQuery<
     ChannelQueryData,
     ChannelQueryVariables
   >(channelQueryData.query, {
     variables: channelQueryData.variables,
     ssr: ssr,
     context: { queryDeduplication: false },
-    fetchPolicy: 'no-cache',
+    fetchPolicy: 'cache-first',
+    skip: typeof window !== 'undefined',
   })
 
   /**
@@ -318,23 +319,13 @@ export function usePaginatedBlocks<
   )
 
   /**
-   * A helper function to re-query for pages that have already been
-   * queried. This is used after a mutation updates the blocks array.
+   * Returns the page number that a block's index would be in
    */
-  const revalidatePages = useCallback(
-    (fromPage: number, toPage: number) => {
-      const dir = toPage > fromPage ? 1 : -1
-      for (let page = fromPage; page !== toPage + dir; page += dir) {
-        if (queriedPageNumbersRef.current.has(page)) {
-          fetchMore({
-            variables: {
-              page: page,
-            },
-          })
-        }
-      }
+  const getPageFromIndex: (index: number) => number = useCallback(
+    index => {
+      return Math.floor(index / per) + 1
     },
-    [fetchMore]
+    [per]
   )
 
   // =====================
@@ -344,8 +335,12 @@ export function usePaginatedBlocks<
   /**
    * An array of blocks that apollo currently has cached
    */
-  const blocks: UsePaginatedBlocksApi<ChannelQueryData>['blocks'] =
-    unsafeData?.channel?.blokks ?? []
+  const [blocks, setBlocks] = useState<
+    UsePaginatedBlocksApi<ChannelQueryData>['blocks']
+  >(() => {
+    const initialData = getQueryFromCache()?.channel?.blokks
+    return initialData ? [...initialData] : []
+  })
 
   /**
    * The total number of blocks/channels that a channel has. Note that this
@@ -362,45 +357,6 @@ export function usePaginatedBlocks<
         },
       }
     )?.data?.channel?.counts?.contents ?? 0
-
-  /**
-   * Gets block data from a given page
-   */
-  const getPage: UsePaginatedBlocksApi<
-    ChannelQueryData
-  >['getPage'] = useCallback(
-    pageNumber => {
-      queriedPageNumbersRef.current.add(pageNumber)
-
-      fetchMore({
-        variables: {
-          page: pageNumber,
-        },
-      })
-    },
-    [fetchMore]
-  )
-
-  /**
-   * Returns if a given page has already been queried for or not
-   */
-  const hasQueriedPage: UsePaginatedBlocksApi<
-    ChannelQueryData
-  >['hasQueriedPage'] = useCallback(pageNember => {
-    return queriedPageNumbersRef.current.has(pageNember)
-  }, [])
-
-  /**
-   * Returns the page number that a block's index would be in
-   */
-  const getPageFromIndex: UsePaginatedBlocksApi<
-    ChannelQueryData
-  >['getPageFromIndex'] = useCallback(
-    index => {
-      return Math.floor(index / per) + 1
-    },
-    [per]
-  )
 
   /**
    * Removes a block from a channel ONLY on the frontend. Does not do any
@@ -434,20 +390,13 @@ export function usePaginatedBlocks<
         const newBlocks = [...prevBlocks]
         newBlocks.splice(blockIndex, 1)
 
-        // Revalidate pages between the block index that was removed and
-        // the end of the blocks array
-        revalidatePages(
-          getPageFromIndex(blockIndex),
-          getPageFromIndex(newCount - 1)
-        )
-
         return {
           newBlocks: newBlocks,
           newCount: newCount,
         }
       })
     },
-    [getPageFromIndex, revalidatePages, updateCache]
+    [getPageFromIndex, updateCache]
   )
 
   /**
@@ -615,12 +564,105 @@ export function usePaginatedBlocks<
   const addBlock: UsePaginatedBlocksApi<
     ChannelQueryData
   >['addBlock'] = useCallback(() => {
-    queriedPageNumbersRef.current = new Set()
-    client.refetchQueries({
-      include: [channelQuery],
-      optimistic: true,
-    })
+    // queriedPageNumbersRef.current = new Set()
+    // client.refetchQueries({
+    //   include: [channelQuery],
+    //   optimistic: true,
+    // })
   }, [channelQuery, client])
+
+  const viewedBlock: UsePaginatedBlocksApi<
+    ChannelQueryData
+  >['viewedBlock'] = useCallback(
+    ({ blockIndex, viewed }) => {
+      const pageNumber = getPageFromIndex(blockIndex)
+      let pageSet = viewedPagesRef.current.get(pageNumber)
+
+      if (viewed) {
+        if (pageSet?.has(blockIndex)) {
+          return
+        }
+
+        if (!pageSet) {
+          pageSet = new Set<number>()
+          viewedPagesRef.current.set(pageNumber, pageSet)
+        }
+
+        if (pageSet.size === 0) {
+          if (!pageState.current.has(pageNumber)) {
+            pageState.current.set(pageNumber, 'pending')
+
+            const pageStateOldRef = pageState.current
+
+            const fetchMoreVariables: ChannelQueryVariables = {
+              ...channelQueryData.variables,
+              page: pageNumber,
+            }
+
+            const watchedQuery = client.watchQuery<
+              ChannelQueryData,
+              ChannelQueryVariables
+            >({
+              query: channelQuery,
+              variables: fetchMoreVariables,
+              fetchPolicy: 'network-only',
+            })
+
+            const sub = watchedQuery.subscribe({
+              next(x) {
+                if (x.partial) {
+                  return
+                }
+
+                // console.log(x)
+              },
+              error() {},
+              complete() {},
+            })
+            // console.log('here', sub)
+            sub.unsubscribe()
+            /*
+            fetchMore<ChannelQueryData, ChannelQueryVariables>({
+              variables: fetchMoreVariables,
+            }).then(() => {
+              if (pageStateOldRef === pageState.current) {
+                pageState.current.set(pageNumber, 'validated')
+
+                const blocks = getQueryFromCache()?.channel?.blokks
+
+                if (!blocks) {
+                  return
+                }
+
+                setBlocks(() => {
+                  return blocks
+                })
+                console.log('loaded', pageNumber, blocks)
+              }
+            })
+            */
+          }
+        }
+
+        pageSet.add(blockIndex)
+      } else {
+        if (!pageSet) {
+          return
+        }
+
+        if (!pageSet.has(blockIndex)) {
+          return
+        }
+
+        pageSet.delete(blockIndex)
+
+        if (pageSet.size === 0) {
+          viewedPagesRef.current.delete(pageNumber)
+        }
+      }
+    },
+    [fetchMore, getPageFromIndex]
+  )
 
   // ==============================
   // Build and return the final api
@@ -629,9 +671,7 @@ export function usePaginatedBlocks<
   const api: UsePaginatedBlocksApi<ChannelQueryData> = {
     blocks,
     contentCount,
-    getPage,
-    hasQueriedPage,
-    getPageFromIndex,
+    viewedBlock,
     moveBlock,
     removeBlock,
     addBlock,

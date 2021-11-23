@@ -63,8 +63,11 @@ const everythingExcept = (
 const paginationWithPageAndPer: FieldMergeFunction<any, any> = (
   existing,
   incoming,
-  { args: { page = 1, per = 25 } = {} }
+  { args: { page = 1, per = 25 } = {}, cache }
 ) => {
+  if (per === 10) {
+    console.log('HERE!!!!')
+  }
   /*
    * Ensure args and data is properly set up
    */
